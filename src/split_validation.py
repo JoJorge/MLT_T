@@ -64,7 +64,9 @@ for pair in data:
         rating_per_book[pair[1]] += 1
     else:
         rating_per_book.update({pair[1]: 1})
-
+print('Total users:', len(rating_per_user))
+print('Total books:', len(rating_per_book), '\n')
+        
 # get sorted rating per user/book        
 rpu_vlst = list(rating_per_user.values())
 sorted_idx_rpu = sorted(range(len(rpu_vlst)), key = lambda i: rpu_vlst[i])
@@ -80,10 +82,45 @@ print('Final validation size for user: %.2f%%\n'%(len(user_valid) / lenData * 10
 # get appropriate n for split validation data w.o/ rating for user and get user validation data
 final_n_book, book_valid = split_wo_data([x[1] for x in data], rating_per_book, percent_valid_wo_rating_book)
 print('Final selected n for book:', final_n_book)
-print('Final validation size for book: %.2f%%'%(len(book_valid) / lenData * 100))
+print('Final validation size for book: %.2f%%\n'%(len(book_valid) / lenData * 100))
+
+# print some analysis
 overlap = np.sum(used_data == 2)
+for i in range(lenData):
+    if used_data[i] > 0:
+        rating_per_user[data[i][0]] -= 1
+        rating_per_book[data[i][1]] -= 1
+cnt_unknown_book_in_user, cnt_unknown_user_in_book = 0, 0
+for rating in user_valid:
+    if rating_per_book[rating[1]] == 0:
+        cnt_unknown_book_in_user += 1
+for rating in book_valid:
+    if rating_per_user[rating[0]] == 0:
+        cnt_unknown_user_in_book += 1
 print('Overlap: %.2f%%\n'%(overlap / lenData * 100))
+print('Unrated books in user_valid: %.2f%%/%.2f%%'%(cnt_unknown_book_in_user/lenData*100, len(user_valid)/lenData*100))
+print('Unrating users in book_valid: %.2f%%/%.2f%%\n'%(cnt_unknown_user_in_book/lenData*100, len(book_valid)/lenData*100))
 
 # write validation for user and book
 write_rating('user_valid.csv', user_valid)
 write_rating('book_valid.csv', book_valid)
+
+# split validation with rating (make sure every user and book has rating)
+total_num = 0
+rating_valid = []
+for i in range(lenData):
+    if used_data[i] > 0:
+        continue
+    rating = data[i]
+    if rating_per_user[rating[0]] <= 1 or rating_per_book[rating[1]] <= 1:
+        continue
+    total_num += 1
+    rating_valid.append(rating)
+    rating_per_user[rating[0]] -= 1
+    rating_per_book[rating[1]] -= 1
+    if total_num / lenData * 100 >= percent_valid_w_rating:
+        break
+print('Final validation size for normal rating: %.2f%%\n'%(len(rating_valid) / lenData * 100))
+
+# write validation data
+write_rating('valid.csv', rating_valid)
