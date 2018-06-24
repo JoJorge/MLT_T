@@ -111,6 +111,7 @@ rating_valid = []
 for i in range(lenData):
     if used_data[i] > 0:
         continue
+    used_data[i] = 1
     rating = data[i]
     if rating_per_user[rating[0]] <= 1 or rating_per_book[rating[1]] <= 1:
         continue
@@ -124,3 +125,10 @@ print('Final validation size for normal rating: %.2f%%\n'%(len(rating_valid) / l
 
 # write validation data
 write_rating('valid.csv', rating_valid)
+
+# write split train data
+data_split = []
+for i in range(lenData):
+    if used_data[i] == 0:
+        data_split.append(data[i])
+write_rating('train_split.csv', data_split)
