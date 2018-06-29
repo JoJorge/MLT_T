@@ -21,17 +21,17 @@ def get_model(user_num, book_num, embedding_size, no_bias):
     user_in = Input(shape=[1])
     book_in = Input(shape=[1])
 
-    user_emb = Flatten()(Embedding(user_num, embedding_size, input_length=1)(user_in))
-    book_emb = Flatten()(Embedding(book_num, embedding_size, input_length=1)(book_in))
+    user_emb = Flatten()(Embedding(user_num, embedding_size, input_length=1, name='user_emb')(user_in))
+    #book_emb = Flatten()(Embedding(book_num, embedding_size, input_length=1)(book_in))
     #user_emb = Flatten()(Embedding(user_num, embedding_size, input_length=1, embeddings_regularizer=regularizers.l2(0.0001))(user_in))
-    #book_emb = Flatten()(Embedding(book_num, embedding_size, input_length=1, embeddings_regularizer=regularizers.l2(0.0001))(book_in))
+    book_emb = Flatten()(Embedding(book_num, embedding_size, input_length=1, name='book_emb', embeddings_regularizer=regularizers.l2(0.0001))(book_in))
     d = Dot(1)([user_emb, book_emb])
 
     if no_bias:
         model = keras.models.Model([user_in, book_in], d)
     else:
-        user_bias = Flatten()(Embedding(user_num, 1, input_length=1)(user_in))
-        book_bias = Flatten()(Embedding(book_num, 1, input_length=1)(book_in))
+        user_bias = Flatten()(Embedding(user_num, 1, input_length=1, name='user_bias')(user_in))
+        book_bias = Flatten()(Embedding(book_num, 1, input_length=1, name='book_bias')(book_in))
         bias = Add()([user_bias, book_bias])
 
         out = Add()([d, bias])
@@ -63,12 +63,12 @@ def read_data(filename):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train-file', type=str, default="book_ratings_train.csv")
+    parser.add_argument('--train-file', type=str, default="../data/book_ratings_train.csv")
     #parser.add_argument('--book-file', type=str, default="books.csv")
     #parser.add_argument('--user-file', type=str, default="users.csv")
     parser.add_argument('--num-epoch', type=int, default=10)
     parser.add_argument('--embedding-size', type=int, default=50)
-    parser.add_argument('--outdir', type=str, default='modeldir')
+    parser.add_argument('--outdir', type=str, default='../modeldir')
     #parser.add_argument('--valid-save', type=str, default='')
     parser.add_argument('--batch-size', type=int, default=512)
     parser.add_argument('--train-rate', type=float, default=0.99)
