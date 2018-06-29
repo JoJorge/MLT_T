@@ -107,8 +107,8 @@ for rating in book_valid:
     if rating_per_user[rating[0]] == 0:
         cnt_unknown_user_in_book += 1
 print('Overlap: %.2f%%\n'%(overlap / lenData * 100))
-print('Unrated books in user_valid: %.2f%%/%.2f%%'%(cnt_unknown_book_in_user/lenData*100, len(user_valid)/lenData*100))
-print('Unrating users in book_valid: %.2f%%/%.2f%%\n'%(cnt_unknown_user_in_book/lenData*100, len(book_valid)/lenData*100))
+print('Unrated books in user_valid: %d/%d'%(cnt_unknown_book_in_user, len(user_valid)))
+print('Unrating users in book_valid: %d/%d\n'%(cnt_unknown_user_in_book, len(book_valid)))
 
 # write validation for user and book
 write_rating('user_valid.csv', user_valid)
@@ -120,10 +120,10 @@ rating_valid = []
 for i in range(lenData):
     if used_data[i] > 0:
         continue
-    used_data[i] = 1
     rating = data[i]
     if rating_per_user[rating[0]] <= 1 or rating_per_book[rating[1]] <= 1:
         continue
+    used_data[i] = 1
     total_num += 1
     rating_valid.append(rating)
     rating_per_user[rating[0]] -= 1
