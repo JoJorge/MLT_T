@@ -3,6 +3,7 @@
 
 import csv
 import numpy as np
+import pdb
 
 percent_valid_w_rating = 5
 percent_valid_wo_rating_user = 5
@@ -12,15 +13,19 @@ keys = []
 data = []
 data_path = '../data/'
 
-def split_wo_data(IDs, rating_per_ID, need_percent): 
+def split_wo_data(IDs, IDs2, rating_per_ID, rating_per_ID2, need_percent, used_ID): 
     final_n, total_num = 1, 0
     valid = []
     for n in range(1, max_split_rating_per_ub+1):
         for i in range(lenData):
-            ID = IDs[i]
-            if rating_per_ID[ID] == n:
+            ID, ID2 = IDs[i], IDs2[i]
+            if rating_per_ID[ID] <= n and rating_per_ID[ID] > 0 and rating_per_ID2[ID2] > 1 and used_data[i] == 0:
+                if rating_per_ID[ID] == 1 and ID in used_ID:
+                    continue
                 valid.append(data[i])
                 used_data[i] += 1
+                rating_per_ID[ID] -= 1
+                rating_per_ID2[ID2] -= 1
                 total_num += 1
                 if total_num / lenData * 100 >= need_percent:
                     final_n = n
@@ -44,6 +49,8 @@ with open(data_path + 'book_ratings_train.csv', newline = '', encoding = 'utf-8'
     keys = data[0]
     data = data[1:]
 
+np.random.shuffle(data)
+    
 lenData = len(data)
 print(keys)
 print('Number of pairs:', lenData, '\n')
@@ -75,21 +82,23 @@ sorted_idx_rpb = sorted(range(len(rpb_vlst)), key = lambda i: rpb_vlst[i])
 
 used_data = np.zeros((lenData))
 # get appropriate n for split validation data w.o/ rating for user and get user validation data
-final_n_user, user_valid = split_wo_data([x[0] for x in data], rating_per_user, percent_valid_wo_rating_user)
+final_n_user, user_valid = split_wo_data([x[0] for x in data], [x[1] for x in data], rating_per_user, rating_per_book, percent_valid_wo_rating_user, [])
 print('Final selected n for user:', final_n_user)
 print('Final validation size for user: %.2f%%\n'%(len(user_valid) / lenData * 100))
+used_book = [data[i][1] for i in range(lenData) if used_data[i] > 0]
+
+#pdb.set_trace()
 
 # get appropriate n for split validation data w.o/ rating for user and get user validation data
-final_n_book, book_valid = split_wo_data([x[1] for x in data], rating_per_book, percent_valid_wo_rating_book)
+final_n_book, book_valid = split_wo_data([x[1] for x in data], [x[0] for x in data], rating_per_book, rating_per_user, percent_valid_wo_rating_book, used_book)
 print('Final selected n for book:', final_n_book)
 print('Final validation size for book: %.2f%%\n'%(len(book_valid) / lenData * 100))
 
+#pdb.set_trace()
+
 # print some analysis
 overlap = np.sum(used_data == 2)
-for i in range(lenData):
-    if used_data[i] > 0:
-        rating_per_user[data[i][0]] -= 1
-        rating_per_book[data[i][1]] -= 1
+
 cnt_unknown_book_in_user, cnt_unknown_user_in_book = 0, 0
 for rating in user_valid:
     if rating_per_book[rating[1]] == 0:
