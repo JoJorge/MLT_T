@@ -13,6 +13,7 @@ book_path = data_path + 'books.csv'
 split_rating_path = data_path + 'train_split.csv'
 imp_rating_path = data_path + 'implicit_ratings.csv'
 users_train_rating_path = data_path + 'user_valid.csv'
+books_train_rating_path = data_path + 'book_valid.csv'
 reading_users_emb_path = data_path + 'reading_users_emb.pickle'
 imp_reading_users_emb_path = data_path + 'imp_reading_users_emb.pickle'
 weights_path = data_path + 'weights.pickle'
@@ -33,7 +34,9 @@ class MF_model:
         self.book_avg_emb = (np.average(np.array(list(self.book2emb.values())), axis = 0), np.average(list(self.book2bias.values())))
     def set_info(self, users_info, books_info, ratings, imp_ratings):
         self.users_info = users_info
+        self.user_id2info = {row['User-ID']: row for i, row in users_info.iterrows()}
         self.books_info = books_info
+        self.book_id2info = {row.ISBN: row for i, row in books_info.iterrows()}
         self.ratings = ratings
         self.imp_ratings = imp_ratings
     def predict(self, user_id, book_id):
@@ -109,6 +112,29 @@ class MF_model:
         y_g = reg.predict(x)
         error = mean_absolute_error(y_g, y) * self.rating_std
         print('MAE of user_valid:', error, '\n')
+    def train_books_weights(self, train_ratings):
+        print('Training book weights....')
+        self.has_book_weights = True
+        x, y = [], []
+        for i, row in train_ratings.iterrows():
+            user_id, book_id = row[0], row[1]
+            user_emb = (self.user2emb[user_id], self.user2bias[user_id])
+            book_embs = self.get_book_embs(user_id, book_id)
+            x.append([np.dot(user_emb[0], v[0]) + v[1] for v in book_embs])
+            y.append((row[2] - self.rating_mean) / self.rating_std - user_emb[1])
+            if (i+1) % 20 == 0:
+                print('.', end='', flush = True)
+            if (i+1) % 500 == 0:
+                print('', flush = True)
+                
+        # TODO: TRAIN with MAE
+        reg = linear_model.LinearRegression(fit_intercept = False)
+        reg.fit(x, y)
+        self.book_weights = reg.coef_.flatten()
+        print('Done')
+        y_g = reg.predict(x)
+        error = mean_absolute_error(y_g, y) * self.rating_std
+        print('MAE of book_valid:', error, '\n')
     def save_weights(self):
         with open(weights_path, 'wb') as f:
             pickle.dump((self.user_weights, self.book_weights), f, pickle.HIGHEST_PROTOCOL)
@@ -133,20 +159,31 @@ class MF_model:
         if self.has_book_weights == False:
             return self.book_avg_emb
         else:
-            # --TODO--
-            # use the weight and other info to get embedding
-            # --------
-            return None
+            book_embs = self.get_book_embs(user_id, book_id)
+            book_emb = np.average([x[0] for x in book_embs], axis = 0, weights = self.book_weights)
+            book_bias = np.average([x[1] for x in book_embs], weights = self.book_weights)
+            return (book_emb, book_bias)
     def get_user_embs(self, user_id, book_id):
-        user_info = self.users_info[self.users_info['User-ID'] == user_id].iloc[0,:]
+        user_info = self.user_id2info[user_id]
         user_embs = [self.country_emb[user_info.Location], self.age_emb[user_info.Age]]
         user_embs.append(self.get_reading_users_emb(book_id))
         user_embs.append(self.get_imp_reading_users_emb(book_id))
         return user_embs
+    def get_book_embs(self, user_id, book_id):
+        book_info = self.book_id2info[book_id]
+        book_embs = [self.author_emb[book_info['Book-Author']], self.publisher_emb[book_info.Publisher]]
+        book_embs.extend([self.pub_year_emb[book_info['Year-Of-Publication']], self.class_emb[book_info.Classification]])
+        book_embs.append(self.get_read_books_emb(user_id))
+        book_embs.append(self.get_imp_read_books_emb(user_id))
+        return book_embs
     def get_avg_from_user_IDs(self, users):
         user_embs = np.array([self.user2emb[x] for x in users])
         user_biases = np.array([self.user2bias[x] for x in users])
         return (np.average(user_embs, axis=0), np.average(user_biases))
+    def get_avg_from_book_IDs(self, books):
+        book_embs = np.array([self.book2emb[x] for x in books])
+        book_biases = np.array([self.book2bias[x] for x in books])
+        return (np.average(book_embs, axis=0), np.average(book_biases))
     def get_reading_users_emb(self, book_id):
         if book_id not in self.reading_users_emb:
             users = self.ratings['User-ID'][self.ratings.ISBN == book_id]
@@ -165,6 +202,24 @@ class MF_model:
             else:
                 self.imp_reading_users_emb.update({book_id: self.get_avg_from_user_IDs(users)})
         return self.imp_reading_users_emb[book_id]
+    def get_read_books_emb(self, user_id):
+        if user_id not in self.read_books_emb:
+            books = self.ratings.ISBN[self.ratings['User-ID'] == user_id]
+            books = [x for x in books if x in self.book2emb]
+            if len(books) == 0:
+                self.read_books_emb.update({user_id: self.book_avg_emb})
+            else:
+                self.read_books_emb.update({user_id: self.get_avg_from_book_IDs(books)})
+        return self.read_books_emb[user_id]
+    def get_imp_read_books_emb(self, user_id):
+        if user_id not in self.imp_read_books_emb:
+            books = self.imp_ratings.ISBN[(self.imp_ratings['User-ID'] == user_id)].tolist()
+            books = [x for x in books if x in self.book2emb]
+            if len(books) == 0:
+                self.imp_read_books_emb.update({user_id: self.book_avg_emb})
+            else:
+                self.imp_read_books_emb.update({user_id: self.get_avg_from_book_IDs(books)})
+        return self.imp_read_books_emb[user_id]
             
 def read_info(user_path, book_path):
     users_info = pandas.read_csv(user_path)
@@ -186,23 +241,28 @@ def read_model(emb_path, normalize_path):
     return MF_model(user2emb, book2emb, user2bias, book2bias, rating_mean, rating_std)
     
 if __name__ == '__main__':
+    print('Reading model and info....')
     mf_model = read_model(emb_path, normalize_path)
     users_info, books_info, split_ratings, imp_ratings = read_info(user_path, book_path)
     mf_model.set_info(users_info, books_info, split_ratings, imp_ratings)
     
+    print('Getting average embedding and load preprocess data')
     mf_model.get_avg_emb()
     mf_model.load_large_avg_emb()
-    mf_model.load_weights()
+    # mf_model.load_weights()
     pdb.set_trace()
     
     # user train
-    '''
+    #'''
     users_train_ratings = pandas.read_csv(users_train_rating_path)
     mf_model.train_users_weights(users_train_ratings)
     pdb.set_trace()
     #'''
     
     # book train
-    # TODO
+    books_train_ratings = pandas.read_csv(books_train_rating_path)
+    mf_model.train_books_weights(books_train_ratings)
+    pdb.set_trace()
     
+    mf_model.save_large_avg_emb()
     mf_model.save_weights()
