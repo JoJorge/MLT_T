@@ -25,21 +25,24 @@ test_path = data_path + 'book_ratings_test.csv'
 predict_path = data_path + 'predict.csv'
 
 class MF_model:
-    def __init__(self, user2emb, book2emb, user2bias, book2bias, rating_mean, rating_std):
+    def __init__(self, user2emb = None, book2emb = None, user2bias = None, book2bias = None, rating_mean = None, rating_std = None):
         self.user2emb = user2emb
         self.book2emb = book2emb
         self.user2bias = user2bias
         self.book2bias = book2bias
         self.rating_mean = rating_mean
         self.rating_std = rating_std
+        if user2emb is not None:
+            self.user_avg_emb = (np.average(np.array(list(self.user2emb.values())), axis = 0), np.average(list(self.user2bias.values())))
+            self.book_avg_emb = (np.average(np.array(list(self.book2emb.values())), axis = 0), np.average(list(self.book2bias.values())))
+        self.init()
+    def init(self):
         self.country_emb, self.age_emb, self.reading_users_emb, self.imp_reading_users_emb = {}, {}, {}, {}
         self.author_emb, self.publisher_emb, self.pub_year_emb, self.class_emb, self.read_books_emb, self.imp_read_books_emb = {}, {}, {}, {}, {}, {}
         self.has_user_weights = False
         self.has_book_weights = False
         self.user_weights = np.zeros(4)
         self.book_weights = np.zeros(6)
-        self.user_avg_emb = (np.average(np.array(list(self.user2emb.values())), axis = 0), np.average(list(self.user2bias.values())))
-        self.book_avg_emb = (np.average(np.array(list(self.book2emb.values())), axis = 0), np.average(list(self.book2bias.values())))
     def read_info(self, id2info_path, featre2id_path):
         with open(id2info_path, 'rb') as f:
             id2info = pickle.load(f)
@@ -49,12 +52,18 @@ class MF_model:
             f2id = pickle.load(f)
             self.f2users = f2id[0]
             self.f2books = f2id[1]
-    def read_ratings(self, rating_path, imp_rating_path):
-        self.ratings = pandas.read_csv(rating_path)
-        self.imp_ratings = pandas.read_csv(imp_rating_path)
-    def set_ratings(self, ratings, imp_ratings):
-        self.ratings = ratings
-        self.imp_ratings = imp_ratings
+    def read_mf(self, emb_path, normalize_path):
+        with open(emb_path, 'rb') as f:
+            emb_dict = pickle.load(f)
+            self.user2emb = emb_dict['user2emb']
+            self.book2emb = emb_dict['book2emb']
+            self.user2bias = emb_dict['user2bias']
+            self.book2bias = emb_dict['book2bias']
+        with open("nor.pickle", 'rb') as f:
+            self.rating_mean, self.rating_std = pickle.load(f)
+        self.user_avg_emb = (np.average(np.array(list(self.user2emb.values())), axis = 0), np.average(list(self.user2bias.values())))
+        self.book_avg_emb = (np.average(np.array(list(self.book2emb.values())), axis = 0), np.average(list(self.book2bias.values())))
+        init()
     def save_model(self, model_path):
         with open(model_path, 'wb') as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -72,19 +81,6 @@ class MF_model:
             rating = rating[0]
         rating = min(max(rating, 0), 10)
         return int(round(rating))
-    def save_large_avg_emb(self):
-        avg_embs = {'reading_users': self.reading_users_emb, 'imp_reading_users': self.imp_reading_users_emb}
-        avg_embs.update({'read_books': self.read_books_emb, 'imp_read_books': self.imp_read_books_emb})
-        with open(avg_embs_path, 'wb') as f:
-            pickle.dump(avg_embs, f, protocol=pickle.HIGHEST_PROTOCOL)
-    def load_large_avg_emb(self, avg_embs_path):
-        avg_embs = {}
-        with open(avg_embs_path, 'rb') as f:
-            avg_embs = pickle.load(f)
-        self.reading_users_emb = avg_embs['reading_users']
-        self.imp_reading_users_emb = avg_embs['imp_reading_users']
-        self.read_books_emb = avg_embs['read_books']
-        self.imp_read_books_emb = avg_embs['imp_read_books']
     def get_avg_emb(self):
         print('Getting users avg embedding....')
         # countries
@@ -230,7 +226,8 @@ class MF_model:
             book_embs = [self.book_avg_emb] * 3
         else:
             book_info = self.book2info[book_id]
-            book_embs = [self.author_emb[book_info['Book-Author']], self.publisher_emb[book_info.Publisher]]
+            book_embs = [self.author_emb[book_info['Book-Author']]]
+            book_embs.append(self.publisher_emb[book_info.Publisher])
             book_embs.append(self.pub_year_emb[book_info['Year-Of-Publication']])
         book_embs.append(self.read_books_emb[user_id] if user_id in self.read_books_emb else self.book_avg_emb)
         book_embs.append(self.imp_read_books_emb[user_id] if user_id in self.imp_read_books_emb else self.book_avg_emb)
@@ -249,35 +246,6 @@ class MF_model:
         book_embs = np.array([self.book2emb[x] for x in books])
         book_biases = np.array([self.book2bias[x] for x in books])
         return (np.average(book_embs, axis=0), np.average(book_biases))
-    def get_reading_users_emb(self, book_id):
-        if book_id not in self.reading_users_emb:
-            users = self.ratings['User-ID'][self.ratings.ISBN == book_id]
-            users = [x for x in users if x in self.user2emb]
-            self.reading_users_emb.update({book_id: self.get_avg_from_user_IDs(users)})
-        return self.reading_users_emb[book_id]
-    def get_imp_reading_users_emb(self, book_id):
-        if book_id not in self.imp_reading_users_emb:
-            users = self.imp_ratings['User-ID'][(self.imp_ratings.ISBN == book_id)].tolist()
-            users = [x for x in users if x in self.user2emb]
-            self.imp_reading_users_emb.update({book_id: self.get_avg_from_user_IDs(users)})
-        return self.imp_reading_users_emb[book_id]
-    def get_read_books_emb(self, user_id):
-        if user_id not in self.read_books_emb:
-            books = self.ratings.ISBN[self.ratings['User-ID'] == user_id]
-            books = [x for x in books if x in self.book2emb]
-            self.read_books_emb.update({user_id: self.get_avg_from_book_IDs(books)})
-        return self.read_books_emb[user_id]
-    def get_imp_read_books_emb(self, user_id):
-        if user_id not in self.imp_read_books_emb:
-            books = self.imp_ratings.ISBN[(self.imp_ratings['User-ID'] == user_id)].tolist()
-            books = [x for x in books if x in self.book2emb]
-            self.imp_read_books_emb.update({user_id: self.get_avg_from_book_IDs(books)})
-        return self.imp_read_books_emb[user_id]
-            
-def read_rating(rating_path, imp_rating_path):
-    ratings = pandas.read_csv(rating_path)
-    imp_ratings = pandas.read_csv(imp_rating_path)
-    return ratings, imp_ratings
 
 def read_model(emb_path, normalize_path):
     with open(emb_path, 'rb') as f:
@@ -296,13 +264,11 @@ if __name__ == '__main__':
     print('Reading model and info....')
     mf_model = read_model(emb_path, normalize_path)
     mf_model.read_info(id2info_path, featre2id_path)
-    # mf_model.read_ratings(split_rating_path, imp_rating_path)
-    pdb.set_trace()
+    #pdb.set_trace()
     
     print('Getting average embedding....')
     mf_model.get_avg_emb()
-    # mf_model.save_model(model_path)
-    pdb.set_trace()
+    #pdb.set_trace()
     
     '''
     print('Reading saved model....')
@@ -314,22 +280,22 @@ if __name__ == '__main__':
     #'''
     users_train_ratings = pandas.read_csv(users_train_rating_path)
     mf_model.train_users_weights(users_train_ratings)
-    pdb.set_trace()
+    #pdb.set_trace()
     #'''
     
     # book train
-    '''
+    #'''
     books_train_ratings = pandas.read_csv(books_train_rating_path)
     mf_model.train_books_weights(books_train_ratings)
-    pdb.set_trace()
+    #pdb.set_trace()
     #'''
     
-    '''
+    #'''
     print('Saving....')
-    mf_model.save_large_avg_emb()
+    #mf_model.save_large_avg_emb()
     mf_model.save_model(model_path)
     pdb.set_trace()
-    '''
+    #'''
     
     # predict test data
     print('Predicting....')
@@ -345,9 +311,4 @@ if __name__ == '__main__':
     with open(predict_path, 'w') as f:
         for y in y_g:
             f.write('%d\n'%(y))
-    
-    print('Saving again....')
-    mf_model.save_large_avg_emb()
-    mf_model.save_model(model_path)
-    pdb.set_trace()
-    
+     
