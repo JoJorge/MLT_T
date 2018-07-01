@@ -7,10 +7,8 @@ import pdb
 
 data = []
 data_path = '../data/users.csv'
-save_path = '../data/users_pre.csv'
+save_path = '../data/users_DT.csv'
 num_country_class = 20
-age_class_div = [18, 30, 50, 65, float('Inf')]
-age_class_name = ['0-18', '19-30', '30-50', '50-65', '65-']
 
 data = pandas.read_csv(data_path)
 
@@ -49,18 +47,15 @@ data.loc[:, 'Location'] = countries
 country_class_name.append('others')
 print('Done\n')
 
-# ---------- Classify Age ----------
-print('Handling countries....')
-print('\tClassifying....')
+# ---------- Age ----------
+# change nan to 0
+print('Handling Age....')
 ages = []
 for age in data.Age:
     if np.isnan(age):
-        ages.append('unknown')
-        continue
-    for i in range(len(age_class_div)):
-        if age <= age_class_div[i]:
-            ages.append(age_class_name[i])
-            break
+        ages.append(0)
+    else:
+        ages.append(age)
 print('\tSaving....')
 data.loc[:, 'Age'] = ages            
 print('Done\n')
