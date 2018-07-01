@@ -25,7 +25,7 @@ def elim_one(data_table, col):
             count_dict[x] += 1
         else:
             count_dict[x] = 1
-    items = [ x if count_dict[x] >= 2 else "only_1" for x in data_table[col] ]
+    items = [ "only_1" if count_dict[x] == 1 or type(x)==float else x for x in data_table[col] ]
     data_table.loc[:, col] = items
     #pdb.set_trace()
     #count_list = sorted(count_dict.items(), key = lambda x:x[1], reverse = True) 
