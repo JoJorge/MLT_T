@@ -8,6 +8,8 @@ from sklearn.metrics import mean_absolute_error
 data_path = '../data/'
 emb_path = data_path + 'emb.pickle'
 normalize_path = data_path + 'nor.pickle'
+id2info_path = data_path + 'id2info.pickle'
+featre2id_path = data_path + 'f2id.pickle'
 user_path = data_path + 'users_pre.csv'
 user2info_path = data_path + 'user2info.pickle'
 book_path = data_path + 'books_pre.csv'
@@ -38,18 +40,18 @@ class MF_model:
         self.book_weights = np.zeros(6)
         self.user_avg_emb = (np.average(np.array(list(self.user2emb.values())), axis = 0), np.average(list(self.user2bias.values())))
         self.book_avg_emb = (np.average(np.array(list(self.book2emb.values())), axis = 0), np.average(list(self.book2bias.values())))
-    def set_info(self, users_info, books_info, user2info, book2info):
-        self.users_info = users_info
-        self.user2info = user2info
-        self.books_info = books_info
-        self.book2info = book2info
-    def reset_info_dict(self):
-        self.user2info = {row['User-ID']: row for i, row in self.users_info.iterrows()}
-        self.book2info = {row.ISBN: row for i, row in self.books_info.iterrows()}
-        with open(user2info_path, 'wb') as f:
-            pickle.dump(self.user2info, f, protocol = pickle.HIGHEST_PROTOCOL)
-        with open(book2info_path, 'wb') as f:
-            pickle.dump(self.book2info, f, protocol = pickle.HIGHEST_PROTOCOL)
+    def read_info(self, id2info_path, featre2id_path):
+        with open(id2info_path, 'rb') as f:
+            id2info = pickle.load(f)
+            self.user2info = id2info[0]
+            self.book2info = id2info[1]
+        with open(featre2id_path, 'rb') as f:
+            f2id = pickle.load(f)
+            self.f2users = f2id[0]
+            self.f2books = f2id[1]
+    def read_ratings(self, rating_path, imp_rating_path):
+        self.ratings = pandas.read_csv(rating_path)
+        self.imp_ratings = pandas.read_csv(imp_rating_path)
     def set_ratings(self, ratings, imp_ratings):
         self.ratings = ratings
         self.imp_ratings = imp_ratings
@@ -86,61 +88,56 @@ class MF_model:
     def get_avg_emb(self):
         print('Getting users avg embedding....')
         # countries
-        countries = list(set(self.users_info.Location.tolist()))
-        for con in countries:
-            users = [x for x in self.users_info['User-ID'][self.users_info.Location == con] if x in self.user2emb]
-            self.country_emb.update({con: self.get_avg_from_user_IDs(users)})
+        for country in self.f2users['country']:
+            users = [x for x in self.f2users['country'][country] if x in self.user2emb]
+            self.country_emb.update({country: self.get_avg_from_user_IDs(users)})
         # range of age
-        ages = list(set(self.users_info.Age.tolist()))
-        for age in ages:
+        self.age_emb.update({'unknown': self.user_avg_emb})
+        for age in self.f2users['age']:
             if age == 'unknown':
                 self.age_emb.update({age: self.user_avg_emb})
                 continue
-            users = [x for x in self.users_info['User-ID'][self.users_info.Age == age] if x in self.user2emb]
+            users = [x for x in self.f2users['age'][age] if x in self.user2emb]
             self.age_emb.update({age: self.get_avg_from_user_IDs(users)})
         # users reading given book
-        # too large, so only init unknown
-        self.reading_users_emb.update({'unknown': self.user_avg_emb})
+        for book in self.f2users['reading']:
+            users = [x for x in self.f2users['reading'][book] if x in self.user2emb]
+            self.reading_users_emb.update({book: self.get_avg_from_user_IDs(users)})
         # implicit users reading given book
-        self.imp_reading_users_emb.update({'unknown': self.user_avg_emb})
+        for book in self.f2users['imp_reading']:
+            users = [x for x in self.f2users['imp_reading'][book] if x in self.user2emb]
+            self.imp_reading_users_emb.update({book: self.get_avg_from_user_IDs(users)})
         
         print('Getting books avg embedding....')
         # author 
-        for book_id in self.ratings.ISBN:
-            if book_id not in self.book2info:
-                continue
-            if self.book2info[book_id]['Book-Author'] in self.author_emb:
-                continue
-            author = self.book2info[book_id]['Book-Author']
+        for author in self.f2books['author']:
             if author == 'only_1':
                 self.author_emb.update({author: self.book_avg_emb})
                 continue
-            books = [x for x in self.books_info.ISBN[self.books_info['Book-Author'] == author] if x in self.book2emb]
+            books = [x for x in self.f2books['author'][author] if x in self.book2emb]
             self.author_emb.update({author: self.get_avg_from_book_IDs(books)})
         # publisher
-        for book_id in self.ratings.ISBN:
-            if book_id not in self.book2info:
-                continue
-            if self.book2info[book_id].Publisher in self.publisher_emb:
-                continue
-            publisher = self.book2info[book_id].Publisher
+        for publisher in self.f2books['publisher']:
             if publisher == 'only_1':
                 self.publisher_emb.update({publisher: self.book_avg_emb})
                 continue
-            books = [x for x in self.books_info.ISBN[self.books_info.Publisher == publisher] if x in self.book2emb]
+            books = [x for x in self.f2books['publisher'][publisher] if x in self.book2emb]
             self.publisher_emb.update({publisher: self.get_avg_from_book_IDs(books)})
         # range of publish year
-        pub_years = list(set(self.books_info['Year-Of-Publication'].tolist()))
-        for pub_year in pub_years:
-            books = [x for x in self.books_info.ISBN[self.books_info['Year-Of-Publication'] == pub_year] if x in self.book2emb]
-            self.pub_year_emb.update({pub_year: self.get_avg_from_book_IDs(books)})
+        for year in self.f2books['year']:
+            books = [x for x in self.f2books['year'][year] if x in self.book2emb]
+            self.pub_year_emb.update({year: self.get_avg_from_book_IDs(books)})
         # --TODO--
         # classification
         # --------
         # books read by given user
-        self.read_books_emb.update({'unknown': self.book_avg_emb})
+        for user in self.f2books['read']:
+            books = [x for x in self.f2books['read'][user] if x in self.book2emb]
+            self.read_books_emb.update({user: self.get_avg_from_book_IDs(books)})
         # implicit books read by given user
-        self.imp_read_books_emb.update({'unknown': self.book_avg_emb})
+        for user in self.f2books['imp_read']:
+            books = [x for x in self.f2books['imp_read'][user] if x in self.book2emb]
+            self.imp_read_books_emb.update({user: self.get_avg_from_book_IDs(books)})
     def train_users_weights(self, train_ratings):
         print('Training user weights....')
         self.has_user_weights = True
@@ -222,8 +219,10 @@ class MF_model:
         else:
             user_info = self.user2info[user_id]
             user_embs = [self.country_emb[user_info.Location], self.age_emb[user_info.Age]]
-        user_embs.append(self.get_reading_users_emb(book_id))
-        user_embs.append(self.get_imp_reading_users_emb(book_id))
+        user_embs.append(self.reading_users_emb[book_id] if book_id in self.reading_users_emb else self.user_avg_emb)
+        user_embs.append(self.imp_reading_users_emb[book_id] if book_id in self.imp_reading_users_emb else self.user_avg_emb)
+        #user_embs.append(self.get_reading_users_emb(book_id))
+        #user_embs.append(self.get_imp_reading_users_emb(book_id))
         return user_embs
     def get_book_embs(self, user_id, book_id):
         book_embs = []
@@ -231,19 +230,12 @@ class MF_model:
             book_embs = [self.book_avg_emb] * 3
         else:
             book_info = self.book2info[book_id]
-            if book_info['Book-Author'] in self.author_emb:
-                book_embs.append(self.author_emb[book_info['Book-Author']])
-            else:
-                book_embs.append(self.book_avg_emb)
-            if book_info.Publisher in self.publisher_emb:
-                book_embs.append(self.publisher_emb[book_info.Publisher])
-            else:
-                book_embs.append(self.book_avg_emb)
-            # book_embs = [self.author_emb[book_info['Book-Author']], self.publisher_emb[book_info.Publisher]]
-            #book_embs.extend([self.pub_year_emb[book_info['Year-Of-Publication']], self.class_emb[book_info.Classification]])
+            book_embs = [self.author_emb[book_info['Book-Author']], self.publisher_emb[book_info.Publisher]]
             book_embs.append(self.pub_year_emb[book_info['Year-Of-Publication']])
-        book_embs.append(self.get_read_books_emb(user_id))
-        book_embs.append(self.get_imp_read_books_emb(user_id))
+        book_embs.append(self.read_books_emb[user_id] if user_id in self.read_books_emb else self.book_avg_emb)
+        book_embs.append(self.imp_read_books_emb[user_id] if user_id in self.imp_read_books_emb else self.book_avg_emb)
+        #book_embs.append(self.get_read_books_emb(user_id))
+        #book_embs.append(self.get_imp_read_books_emb(user_id))
         return book_embs
     def get_avg_from_user_IDs(self, users):
         if len(users) == 0:
@@ -282,18 +274,6 @@ class MF_model:
             self.imp_read_books_emb.update({user_id: self.get_avg_from_book_IDs(books)})
         return self.imp_read_books_emb[user_id]
             
-def read_info(user_path, book_path, user2info_path, book2info_path):
-    users_info = pandas.read_csv(user_path)
-    books_info = pandas.read_csv(book_path)
-    user2info = {}
-    with open(user2info_path, 'rb') as f:
-        user2info = pickle.load(f)
-    book2info = {}
-    with open(book2info_path, 'rb') as f:
-        book2info = pickle.load(f)
-    split_ratings = pandas.read_csv(split_rating_path)
-    imp_ratings = pandas.read_csv(imp_rating_path)
-    return users_info, books_info, user2info, book2info
 def read_rating(rating_path, imp_rating_path):
     ratings = pandas.read_csv(rating_path)
     imp_ratings = pandas.read_csv(imp_rating_path)
@@ -312,24 +292,26 @@ def read_model(emb_path, normalize_path):
     return MF_model(user2emb, book2emb, user2bias, book2bias, rating_mean, rating_std)
     
 if __name__ == '__main__':
-    '''
+    
     print('Reading model and info....')
     mf_model = read_model(emb_path, normalize_path)
-    mf_model.set_info(*read_info(user_path, book_path, user2info_path, book2info_path))
-    mf_model.set_ratings(*read_rating(split_rating_path, imp_rating_path))
+    mf_model.read_info(id2info_path, featre2id_path)
+    # mf_model.read_ratings(split_rating_path, imp_rating_path)
     pdb.set_trace()
     
-    print('Getting average embedding and load preprocess data....')
+    print('Getting average embedding....')
     mf_model.get_avg_emb()
-    mf_model.save_model(model_path)
+    # mf_model.save_model(model_path)
     pdb.set_trace()
+    
     '''
     print('Reading saved model....')
     mf_model = MF_model.load_model(model_path)
     pdb.set_trace()
+    '''
     
     # user train
-    '''
+    #'''
     users_train_ratings = pandas.read_csv(users_train_rating_path)
     mf_model.train_users_weights(users_train_ratings)
     pdb.set_trace()
