@@ -23,11 +23,13 @@ def get_unique(series):
     return list(set(series.tolist()))
 
 # user/book_id to info
+print('Preprocessing id to info....')
 user2info = {row['User-ID']: row for i, row in users_info.iterrows()}
 book2info = {row.ISBN: row for i, row in books_info.iterrows()}
-pdb.set_trace()
+#pdb.set_trace()
 
 # user feature to list of user_id
+print('Preprocessing users....')
 country2users = {}
 countries = get_unique(users_info.Location)
 for country in countries:
@@ -50,9 +52,10 @@ for i, row in imp_ratings.iterrows():
         imp_book2users.update({book: [row['User-ID']]})
     else:
         imp_book2users[book].append(row['User-ID'])
-pdb.set_trace()
+#pdb.set_trace()
 
 # book feature to list of book_id
+print('Preprocessing books....')
 author2books = {}
 for i, row in books_info.iterrows():
     author = row['Book-Author']
@@ -88,9 +91,10 @@ for i, row in imp_ratings.iterrows():
         imp_user2books.update({user: [row.ISBN]})
     else:
         imp_user2books[user].append(row.ISBN)
-pdb.set_trace()
+#pdb.set_trace()
 
 # save
+print('Saving....')
 with open(id2info_path, 'wb') as f:
     pickle.dump((user2info, book2info), f, pickle.HIGHEST_PROTOCOL)
 user_dict = {'country': country2users, 'age': age2users, 'reading': book2users, 'imp_reading': imp_book2users}
