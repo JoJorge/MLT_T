@@ -66,11 +66,13 @@ class MF_model:
         book_emb = self.get_book_emb(user_id, book_id)
         normalized_rating = np.dot(user_emb[0], book_emb[0]) + user_emb[1] + book_emb[1]
         rating = normalized_rating*self.rating_std + self.rating_mean
+        if type(rating) == np.ndarray:
+            rating = rating[0]
+        rating = min(max(rating, 0), 10)
         return int(round(rating))
     def save_large_avg_emb(self):
         avg_embs = {'reading_users': self.reading_users_emb, 'imp_reading_users': self.imp_reading_users_emb}
         avg_embs.update({'read_books': self.read_books_emb, 'imp_read_books': self.imp_read_books_emb})
-        avg_embs.update({'author_emb': self.author_emb, 'publisher_emb': self.publisher_emb})
         with open(avg_embs_path, 'wb') as f:
             pickle.dump(avg_embs, f, protocol=pickle.HIGHEST_PROTOCOL)
     def load_large_avg_emb(self, avg_embs_path):
@@ -81,8 +83,6 @@ class MF_model:
         self.imp_reading_users_emb = avg_embs['imp_reading_users']
         self.read_books_emb = avg_embs['read_books']
         self.imp_read_books_emb = avg_embs['imp_read_books']
-        #self.author_emb = avg_embs['author_emb']
-        #self.publisher_emb = avg_embs['publisher_emb']
     def get_avg_emb(self):
         print('Getting users avg embedding....')
         # countries
@@ -247,7 +247,7 @@ class MF_model:
         return book_embs
     def get_avg_from_user_IDs(self, users):
         if len(users) == 0:
-            return user_avg_emb
+            return self.user_avg_emb
         user_embs = np.array([self.user2emb[x] for x in users])
         user_biases = np.array([self.user2bias[x] for x in users])
         return (np.average(user_embs, axis=0), np.average(user_biases))
@@ -321,9 +321,7 @@ if __name__ == '__main__':
     
     print('Getting average embedding and load preprocess data....')
     mf_model.get_avg_emb()
-    mf_model.load_large_avg_emb(avg_embs_path)
     mf_model.save_model(model_path)
-    # mf_model.load_weights()
     pdb.set_trace()
     '''
     print('Reading saved model....')
@@ -331,21 +329,25 @@ if __name__ == '__main__':
     pdb.set_trace()
     
     # user train
-    #'''
+    '''
     users_train_ratings = pandas.read_csv(users_train_rating_path)
     mf_model.train_users_weights(users_train_ratings)
     pdb.set_trace()
     #'''
     
     # book train
-    #'''
+    '''
     books_train_ratings = pandas.read_csv(books_train_rating_path)
     mf_model.train_books_weights(books_train_ratings)
     pdb.set_trace()
     #'''
     
+    '''
+    print('Saving....')
     mf_model.save_large_avg_emb()
     mf_model.save_model(model_path)
+    pdb.set_trace()
+    '''
     
     # predict test data
     print('Predicting....')
@@ -353,7 +355,17 @@ if __name__ == '__main__':
     y_g = []
     for i, row in test_rating.iterrows():
         y_g.append(mf_model.predict(row[0], row[1]))
+        if (i+1) % 200 == 0:
+            print('.', end='', flush = True)
+        if (i+1) % 10000 == 0:
+            print('', flush = True)
+    pdb.set_trace()
     with open(predict_path, 'w') as f:
         for y in y_g:
             f.write('%d\n'%(y))
+    
+    print('Saving again....')
+    mf_model.save_large_avg_emb()
+    mf_model.save_model(model_path)
+    pdb.set_trace()
     
