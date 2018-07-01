@@ -1,36 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jun 28 13:42:05 2018
-
-@author: mhci430
-"""
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jun 21 16:02:28 2018
-@author: mhci430
-"""
-#
-#from time import clock
-#start = clock() 
-#
-#
-#import tracemalloc
-#import sys
- 
-# Simulate memory allocate by creating bytes
-
- 
-# Start tracing
-#tracemalloc.start()
- 
-# Your program run here
-
- 
-# Take memory snapshot
-
 import time
 
 start = time.time()
@@ -39,42 +6,35 @@ import tracemalloc
 
 tracemalloc.start()
 
-# ... run your application ...
-
-
-
-
 import math
 from sklearn import datasets
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 import numpy as np
 import csv as csv
 from sklearn.ensemble import RandomForestClassifier
 
-from sklearn.ensemble import RandomForestRegressor as rfr
 from sklearn.model_selection import GridSearchCV
 from sklearn.cross_validation import StratifiedKFold # Add important libs
 from sklearn.preprocessing import LabelEncoder
 from sklearn import preprocessing
 
-Submission_filename="data/book_ratings_test.csv"
-Raw_Book_filename="data/books_pre_most.csv"
-User_filename="data/users_DT.csv"
-Rate_filename="data/book_ratings_train.csv"
-Book_filename="data/BookClassificationResult_onlyTitle.csv"
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.datasets import make_regression
 
-#
+import xgboost as xgb
+
+data_path = '../data/'
+Submission_filename= data_path + "book_ratings_test.csv"
+Raw_Book_filename= data_path + "books_pre_most.csv"
+User_filename= data_path + "users_DT.csv"
+Rate_filename= data_path + "book_ratings_train.csv"
+Book_filename= data_path + "BookClassificationResult_onlyTitle.csv"
 
 
 BookData=pd.read_csv(Book_filename)
-
-
-
-
 
 RateData=pd.read_csv(Rate_filename)
 
@@ -95,11 +55,6 @@ alldatamerge['BookType'].fillna(value=36,inplace=True)
 alldatamerge['Book-Author'].fillna(value='unknown',inplace=True)
 alldatamerge['Publisher'].fillna(value='unknown',inplace=True)
 alldatamerge['Year-Of-Publication'].fillna(value=-1,inplace=True)
-
-
-
-#        
-
 
 
 ##label and one hot
@@ -150,16 +105,8 @@ X=FinalData.iloc[:,3:].values
 y=FinalData.iloc[:,2].values
 
 
-
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.datasets import make_regression
-
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.datasets import make_regression
-import xgboost as xgb
-
 xgdmat=xgb.DMatrix(X,y)
-our_params={'eta':0.1,'seed':0,'subsample':0.8,'colsample_bytree':0.8,'objective':'reg:linear','max_depth':3,'min_child_weight':1}
+our_params={'eta':0.1,'seed':0,'subsample':0.8,'colsample_bytree':0.8,'objective':'reg:linear','max_depth':3,'min_child_weight':1, 'eval_metric': 'mae'}
 final_gb=xgb.train(our_params,xgdmat)
 
 
@@ -240,9 +187,9 @@ y_pred=final_gb.predict(tesdmat)
 
 Mydata=y_pred
 for i in range(len(y_pred)):
-    Mydata[i]=int(y_pred[i])
-np.savetxt('GradientBoost_intOutput.csv', Mydata, delimiter = ',')
-np.savetxt('GradientBoost_floatOutput.csv', Predict, delimiter = ',')
+    Mydata[i]=int(round(y_pred[i]))
+np.savetxt('GradientBoost_intOutput.csv', Mydata, fmt = '%d', delimiter = ',')
+np.savetxt('GradientBoost_floatOutput.csv', y_pred, delimiter = ',')
 
 #pd.DataFrame(y_pred).to_csv("Output_2.csv")
 
