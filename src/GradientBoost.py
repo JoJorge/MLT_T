@@ -39,6 +39,11 @@ import tracemalloc
 
 tracemalloc.start()
 
+# ... run your application ...
+
+
+
+
 import math
 from sklearn import datasets
 import pandas as pd
@@ -149,10 +154,17 @@ y=FinalData.iloc[:,2].values
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.datasets import make_regression
 
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.datasets import make_regression
+import xgboost as xgb
+
+xgdmat=xgb.DMatrix(X,y)
+our_params={'eta':0.1,'seed':0,'subsample':0.8,'colsample_bytree':0.8,'objective':'reg:linear','max_depth':3,'min_child_weight':1}
+final_gb=xgb.train(our_params,xgdmat)
 
 
-regr = RandomForestRegressor(max_depth=2,n_estimators=100,criterion='mse',random_state=1,n_jobs=-1)
-regr.fit(X, y)
+#regr = RandomForestRegressor(max_depth=2,n_estimators=100,criterion='mse',random_state=1,n_jobs=-1)
+#regr.fit(X, y)
 
 
 ####test
@@ -223,21 +235,21 @@ FinalDatatest=alldatamergetest.drop(columns=['User-ID','ISBN','Location', 'Book-
 FinalDatatest= pd.concat([FinalDatatest,OneHotLocationDataFrametest,OneHotBookTypeDataFrametest,OneHotAuthorDataFrametest,OneHotPublisherDataFrametest],axis=1, ignore_index=True)
 
 
+tesdmat=xgb.DMatrix(FinalDatatest.values)
+y_pred=final_gb.predict(tesdmat)
 
-Predict=regr.predict(FinalDatatest.values)
-Mydata=Predict
-for i in range(len(Predict)):
-    Mydata[i]=int(Predict[i])
-np.savetxt('RandomForestRegression_intOutput.csv', Mydata, delimiter = ',')
-np.savetxt('RandomForestRegression_floatOutput.csv', Predict, delimiter = ',')
+Mydata=y_pred
+for i in range(len(y_pred)):
+    Mydata[i]=int(y_pred[i])
+np.savetxt('GradientBoost_intOutput.csv', Mydata, delimiter = ',')
+np.savetxt('GradientBoost_floatOutput.csv', Predict, delimiter = ',')
 
-#predict=pd.DataFrame(Predict)
-#predict.to_csv("Output4.csv")
+#pd.DataFrame(y_pred).to_csv("Output_2.csv")
+
 
 
 
 snapshot = tracemalloc.take_snapshot()
-
 top_stats = snapshot.statistics('lineno')
 
 print("[ Top 10 ]")
@@ -249,48 +261,10 @@ elapsed = end - start
 print ("Time taken: ", elapsed, "seconds.")
 
 
-##############3
 
 
 
+#regr = RandomForestRegressor(max_depth=2,n_estimators=100,criterion='mse',random_state=1,n_jobs=-1)
+#regr.fit(X, y)
 
-#
-#
-#
-#towmergetest['Location']=lebal_Location.fit_transform(towmergetest['Location'])
-#
-#
-#towmergetest['Age']=lebal_Age.fit_transform(towmergetest['Age'])
-#
-#towmergetest['BookType']=lebal_Age.fit_transform(towmergetest['BookType'])
-#
-#
-#OneHotAgeTest=np.zeros((len(towmergetest),len(np.unique(towmergetest['Age']))))
-#OneHotLocationTest=np.zeros((len(towmergetest),len(np.unique(towmergetest['Location']))))
-#OneHotBookTypeTest=np.zeros((len(towmergetest),len(np.unique(towmergetest['BookType']))))
-#
-#
-#for i in range(len(towmergetest)):
-#    
-#    OneHotAgeTest[i][int(towmergetest['Age'][i])]=1
-#    OneHotLocationTest[i][int(towmergetest['Location'][i])]=1
-#    OneHotBookTypeTest[i][int(towmergetest['BookType'][i])]=1
-#
-#OneHotAgeDataFrameTest=pd.DataFrame(OneHotAgeTest,index=range(len(OneHotAgeTest)))
-#OneHotLocationDataFrameTest=pd.DataFrame(OneHotLocationTest,index=range(len(OneHotLocationTest)))
-#OneHotBookTypeDataFrameTest=pd.DataFrame(OneHotBookTypeTest,index=range(len(OneHotBookTypeTest)))
-#
-#
-#FinalDataTest= pd.concat([OneHotAgeDataFrameTest,OneHotLocationDataFrameTest],axis=1, ignore_index=True)
-#
-#Predict=regr.predict(FinalDataTest.values)
-#predict=pd.DataFrame(Predict)
-#predict.to_csv("/Users/mhci430/Documents/R06922088/MachineLearningTechniques/FinalProject/Output.csv")
-##finish = clock() 
-##
-##snap = tracemalloc.take_snapshot()
-## 
-### Evaluate result
-##stats = snap.statistics('lineno')
-##for stat in stats:
-##    print(stat)
+
