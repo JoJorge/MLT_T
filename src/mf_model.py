@@ -6,8 +6,8 @@ from sklearn import linear_model
 from sklearn.metrics import mean_absolute_error
 
 data_path = '../data/'
-emb_path = data_path + 'emb.pickle'
-normalize_path = data_path + 'nor.pickle'
+emb_path = data_path + 'emb_split.pickle'
+normalize_path = data_path + 'nor_split.pickle'
 id2info_path = data_path + 'id2info.pickle'
 featre2id_path = data_path + 'f2id.pickle'
 user_path = data_path + 'users_pre.csv'
@@ -18,7 +18,7 @@ split_rating_path = data_path + 'train_split.csv'
 imp_rating_path = data_path + 'implicit_ratings.csv'
 users_train_rating_path = data_path + 'user_valid.csv'
 books_train_rating_path = data_path + 'book_valid.csv'
-model_path = data_path + 'mf_model.pickle'
+model_path = data_path + 'mf_model_split.pickle'
 avg_embs_path = data_path + 'avg_embs.pickle'
 weights_path = data_path + 'weights.pickle'
 test_path = data_path + 'book_ratings_test.csv'
@@ -43,6 +43,9 @@ class MF_model:
         self.has_book_weights = False
         self.user_weights = np.zeros(4)
         self.book_weights = np.zeros(6)
+    def reset_emb(self):
+        self.country_emb, self.age_emb, self.reading_users_emb, self.imp_reading_users_emb = {}, {}, {}, {}
+        self.author_emb, self.publisher_emb, self.pub_year_emb, self.class_emb, self.read_books_emb, self.imp_read_books_emb = {}, {}, {}, {}, {}, {}
     def read_info(self, id2info_path, featre2id_path):
         with open(id2info_path, 'rb') as f:
             id2info = pickle.load(f)
@@ -59,11 +62,11 @@ class MF_model:
             self.book2emb = emb_dict['book2emb']
             self.user2bias = emb_dict['user2bias']
             self.book2bias = emb_dict['book2bias']
-        with open("nor.pickle", 'rb') as f:
+        with open(normalize_path, 'rb') as f:
             self.rating_mean, self.rating_std = pickle.load(f)
         self.user_avg_emb = (np.average(np.array(list(self.user2emb.values())), axis = 0), np.average(list(self.user2bias.values())))
         self.book_avg_emb = (np.average(np.array(list(self.book2emb.values())), axis = 0), np.average(list(self.book2bias.values())))
-        init()
+        #init()
     def save_model(self, model_path):
         with open(model_path, 'wb') as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -261,36 +264,44 @@ def read_model(emb_path, normalize_path):
     
 if __name__ == '__main__':
     
+    '''
     print('Reading model and info....')
     mf_model = read_model(emb_path, normalize_path)
     mf_model.read_info(id2info_path, featre2id_path)
     #pdb.set_trace()
+    #'''
+    
+    #'''
+    print('Reading saved model....')
+    mf_model = MF_model.load_model(model_path)
+    #pdb.set_trace()
+    #'''
+    
+    mf_model.read_mf(data_path + 'emb50-both-reg-data-all.pickle', data_path + 'nor50-both-reg-data-all.pickle')
+    mf_model.reset_emb()
     
     print('Getting average embedding....')
     mf_model.get_avg_emb()
     #pdb.set_trace()
+    #'''
     
-    '''
-    print('Reading saved model....')
-    mf_model = MF_model.load_model(model_path)
-    pdb.set_trace()
-    '''
+    
     
     # user train
-    #'''
+    '''
     users_train_ratings = pandas.read_csv(users_train_rating_path)
     mf_model.train_users_weights(users_train_ratings)
     #pdb.set_trace()
     #'''
     
     # book train
-    #'''
+    '''
     books_train_ratings = pandas.read_csv(books_train_rating_path)
     mf_model.train_books_weights(books_train_ratings)
     #pdb.set_trace()
     #'''
     
-    #'''
+    '''
     print('Saving....')
     #mf_model.save_large_avg_emb()
     mf_model.save_model(model_path)
@@ -307,7 +318,7 @@ if __name__ == '__main__':
             print('.', end='', flush = True)
         if (i+1) % 10000 == 0:
             print('', flush = True)
-    pdb.set_trace()
+    #pdb.set_trace()
     with open(predict_path, 'w') as f:
         for y in y_g:
             f.write('%d\n'%(y))
