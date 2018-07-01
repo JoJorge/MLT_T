@@ -4,25 +4,29 @@ import pandas
 import pdb
 from sklearn import linear_model
 from sklearn.metrics import mean_absolute_error
+import argparse
 
 data_path = '../data/'
 emb_path = data_path + 'emb_split.pickle'
 normalize_path = data_path + 'nor_split.pickle'
+emb2_path = data_path + 'emb_split_t2.pickle'
+normalize2_path = data_path + 'nor_split_t2.pickle'
 id2info_path = data_path + 'id2info.pickle'
 featre2id_path = data_path + 'f2id.pickle'
 user_path = data_path + 'users_pre.csv'
-user2info_path = data_path + 'user2info.pickle'
 book_path = data_path + 'books_pre.csv'
-book2info_path = data_path + 'book2info.pickle'
 split_rating_path = data_path + 'train_split.csv'
 imp_rating_path = data_path + 'implicit_ratings.csv'
 users_train_rating_path = data_path + 'user_valid.csv'
 books_train_rating_path = data_path + 'book_valid.csv'
+users_train_rating2_path = data_path + 'user_valid_t2.csv'
+books_train_rating2_path = data_path + 'book_valid_t2.csv'
 model_path = data_path + 'mf_model_split.pickle'
-avg_embs_path = data_path + 'avg_embs.pickle'
+model2_path = data_path + 'mf_model_t2.pickle'
 weights_path = data_path + 'weights.pickle'
 test_path = data_path + 'book_ratings_test.csv'
 predict_path = data_path + 'predict.csv'
+predict2_path = data_path + 'predict_t2.csv'
 
 class MF_model:
     def __init__(self, user2emb = None, book2emb = None, user2bias = None, book2bias = None, rating_mean = None, rating_std = None):
@@ -75,7 +79,7 @@ class MF_model:
         with open(model_path, 'rb') as f:
             mf_model = pickle.load(f)
         return mf_model
-    def predict(self, user_id, book_id):
+    def predict(self, user_id, book_id, isT2):
         user_emb = self.get_user_emb(user_id, book_id)
         book_emb = self.get_book_emb(user_id, book_id)
         normalized_rating = np.dot(user_emb[0], book_emb[0]) + user_emb[1] + book_emb[1]
@@ -83,7 +87,10 @@ class MF_model:
         if type(rating) == np.ndarray:
             rating = rating[0]
         rating = min(max(rating, 0), 10)
-        return int(round(rating))
+        if isT2:
+            return rating
+        else:
+            return int(round(rating))
     def get_avg_emb(self):
         print('Getting users avg embedding....')
         # countries
@@ -264,20 +271,30 @@ def read_model(emb_path, normalize_path):
     
 if __name__ == '__main__':
     
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--t2', action="store_true")
+    args = parser.parse_args()
+    
     '''
     print('Reading model and info....')
-    mf_model = read_model(emb_path, normalize_path)
+    if args.t2:
+        mf_model = read_model(emb2_path, normalize2_path)
+    else:
+        mf_model = read_model(emb_path, normalize_path)
     mf_model.read_info(id2info_path, featre2id_path)
     #pdb.set_trace()
     #'''
     
     #'''
     print('Reading saved model....')
-    mf_model = MF_model.load_model(model_path)
+    if args.t2:
+        mf_model = MF_model.load_model(model2_path)
+    else:
+        mf_model = MF_model.load_model(model_path)
     #pdb.set_trace()
     #'''
     
-    mf_model.read_mf(data_path + 'emb50-both-reg-data-all.pickle', data_path + 'nor50-both-reg-data-all.pickle')
+    mf_model.read_mf(data_path + 'emb50-rate999-norm-reg0.0001both-t2-alldata.pickle', data_path + 'nor50-rate999-norm-reg0.0001both-t2-alldata.pickle')
     mf_model.reset_emb()
     
     print('Getting average embedding....')
@@ -289,23 +306,31 @@ if __name__ == '__main__':
     
     # user train
     '''
-    users_train_ratings = pandas.read_csv(users_train_rating_path)
+    if args.t2:
+        users_train_ratings = pandas.read_csv(users_train_rating2_path)
+    else:
+        users_train_ratings = pandas.read_csv(users_train_rating_path)
     mf_model.train_users_weights(users_train_ratings)
     #pdb.set_trace()
     #'''
     
     # book train
     '''
-    books_train_ratings = pandas.read_csv(books_train_rating_path)
+    if args.t2:
+        books_train_ratings = pandas.read_csv(books_train_rating2_path)
+    else:
+        books_train_ratings = pandas.read_csv(books_train_rating_path)
     mf_model.train_books_weights(books_train_ratings)
     #pdb.set_trace()
     #'''
     
     '''
     print('Saving....')
-    #mf_model.save_large_avg_emb()
-    mf_model.save_model(model_path)
-    pdb.set_trace()
+    if args.t2:
+        mf_model.save_model(model2_path)
+    else:
+        mf_model.save_model(model_path)
+    #pdb.set_trace()
     #'''
     
     # predict test data
@@ -313,13 +338,18 @@ if __name__ == '__main__':
     test_rating = pandas.read_csv(test_path)
     y_g = []
     for i, row in test_rating.iterrows():
-        y_g.append(mf_model.predict(row[0], row[1]))
+        y_g.append(mf_model.predict(row[0], row[1], args.t2))
         if (i+1) % 200 == 0:
             print('.', end='', flush = True)
         if (i+1) % 10000 == 0:
             print('', flush = True)
     #pdb.set_trace()
-    with open(predict_path, 'w') as f:
-        for y in y_g:
-            f.write('%d\n'%(y))
-     
+    if args.t2:
+        with open(predict2_path, 'w') as f:
+            for y in y_g:
+                f.write('%s\n'%(str(y)))
+    else:
+        with open(predict_path, 'w') as f:
+            for y in y_g:
+                f.write('%s\n'%(str(y)))
+ 
