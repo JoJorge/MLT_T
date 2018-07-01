@@ -13,6 +13,7 @@ if __name__ == '__main__':
     parser.add_argument('--indexfile', type=str, required=True)
     parser.add_argument('--testfile', type=str, default='book_ratings_test.csv')
     parser.add_argument('--outfile', type=str, default='out.csv')
+    parser.add_argument('--get-float', action="store_true")
 
     args = parser.parse_args()
     print(args)
@@ -76,22 +77,24 @@ if __name__ == '__main__':
     layer_dict = { layer.get_config()['name']:layer for layer in model.layers }
     book_emb = layer_dict['book_emb'].get_weights()[0]
     user_emb = layer_dict['user_emb'].get_weights()[0]
-    book_bias = layer_dict['book_bias'].get_weights()[0]
-    user_bias = layer_dict['user_bias'].get_weights()[0]
     assert(book_emb.shape[0] == len(book2index)+1)
     assert(user_emb.shape[0] == len(user2index)+1)
     book_emb[-1] = np.mean(book_emb[:-1], axis=0)
     user_emb[-1] = np.mean(user_emb[:-1], axis=0)
-    book_bias[-1] = np.mean(book_bias[:-1], axis=0)
-    user_bias[-1] = np.mean(user_bias[:-1], axis=0)
     model.get_layer('book_emb').set_weights([book_emb])
     model.get_layer('user_emb').set_weights([user_emb])
-    model.get_layer('book_bias').set_weights([book_bias])
-    model.get_layer('user_bias').set_weights([user_bias])
+    if 'book_bias' in layer_dict:
+        book_bias = layer_dict['book_bias'].get_weights()[0]
+        user_bias = layer_dict['user_bias'].get_weights()[0]
+        book_bias[-1] = np.mean(book_bias[:-1], axis=0)
+        user_bias[-1] = np.mean(user_bias[:-1], axis=0)
+        model.get_layer('book_bias').set_weights([book_bias])
+        model.get_layer('user_bias').set_weights([user_bias])
 
     ys = model.predict([user_xs, book_xs], verbose=1, batch_size=256).reshape(-1)
     ys = ys*rating_std + rating_mean
-    ys = np.rint(ys).astype(int)
+    if args.get_float:
+        ys = np.rint(ys).astype(int)
 
     f = open(args.outfile, "w")
     #f.write("TestDataID,Rating\n")
