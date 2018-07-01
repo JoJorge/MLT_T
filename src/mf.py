@@ -17,14 +17,18 @@ print(device_lib.list_local_devices())
 
 #embedding_size = 80
 
-def get_model(user_num, book_num, embedding_size, no_bias):
+def get_model(user_num, book_num, embedding_size, no_bias, book_reg, user_reg):
     user_in = Input(shape=[1])
     book_in = Input(shape=[1])
 
-    user_emb = Flatten()(Embedding(user_num, embedding_size, input_length=1, name='user_emb')(user_in))
-    #book_emb = Flatten()(Embedding(book_num, embedding_size, input_length=1)(book_in))
-    #user_emb = Flatten()(Embedding(user_num, embedding_size, input_length=1, embeddings_regularizer=regularizers.l2(0.0001))(user_in))
-    book_emb = Flatten()(Embedding(book_num, embedding_size, input_length=1, name='book_emb', embeddings_regularizer=regularizers.l2(0.0001))(book_in))
+    if user_reg <= 0:
+        user_emb = Flatten()(Embedding(user_num, embedding_size, input_length=1, name='user_emb')(user_in))
+    else:
+        user_emb = Flatten()(Embedding(user_num, embedding_size, input_length=1, name='user_emb', embeddings_regularizer=regularizers.l2(user_reg))(user_in))
+    if book_reg <= 0:
+        book_emb = Flatten()(Embedding(book_num, embedding_size, input_length=1, name='book_emb')(book_in))
+    else:
+        book_emb = Flatten()(Embedding(book_num, embedding_size, input_length=1, name='book_emb', embeddings_regularizer=regularizers.l2(book_reg))(book_in))
     d = Dot(1)([user_emb, book_emb])
 
     if no_bias:
@@ -72,6 +76,8 @@ if __name__ == "__main__":
     #parser.add_argument('--valid-save', type=str, default='')
     parser.add_argument('--batch-size', type=int, default=512)
     parser.add_argument('--train-rate', type=float, default=0.99)
+    parser.add_argument('--book-reg', type=float, default=-1)
+    parser.add_argument('--user-reg', type=float, default=-1)
     parser.add_argument('--normalize', action="store_true")
     parser.add_argument('--no-bias', action="store_true")
     args = parser.parse_args()
@@ -91,8 +97,8 @@ if __name__ == "__main__":
     # f.close()
 
     user2index, book2index, user_xs, book_xs, ys = read_data(args.train_file)
-    user_num = len(user2index)
-    book_num = len(book2index)
+    user_num = len(user2index) + 1
+    book_num = len(book2index) + 1
     with open(args.outdir + "/index.pickle", 'wb') as f:
         pickle.dump({"user2index":user2index, "book2index":book2index}, f)
 
@@ -111,9 +117,13 @@ if __name__ == "__main__":
     book_xs = book_xs[:train_num]
     ys = ys[:train_num]
 
+    rating_mean = np.mean(ys)
+    rating_std = np.std(ys)
+    print(rating_mean, rating_std)
+    with open(args.outdir + "/nor.pickle", 'wb') as f:
+        pickle.dump((rating_mean, rating_std), f)
+
     if args.normalize:
-        rating_mean = np.mean(ys)
-        rating_std = np.std(ys)
         ys = (ys - rating_mean) / rating_std
         vys = (vys - rating_mean) / rating_std
         prefix = "normlz-"
@@ -122,11 +132,7 @@ if __name__ == "__main__":
         rating_std = 1
         prefix = ""
 
-    print(rating_mean, rating_std)
-    with open(args.outdir + "/nor.pickle", 'wb') as f:
-        pickle.dump((rating_mean, rating_std), f)
-
-    model = get_model(user_num, book_num, args.embedding_size, args.no_bias)
+    model = get_model(user_num, book_num, args.embedding_size, args.no_bias, args.book_reg, args.user_reg)
     #model.compile(loss='mean_squared_error',
     model.compile(loss='mean_absolute_error',
                   optimizer=optimizers.Adam(),
