@@ -74,12 +74,12 @@ if __name__ == '__main__':
 
     model = keras.models.load_model(args.loadmodel)
     layer_dict = { layer.get_config()['name']:layer for layer in model.layers }
-    assert(book_emb.shape[0] == len(book2index)+1)
-    assert(user_emb.shape[0] == len(user2index)+1)
     book_emb = layer_dict['book_emb'].get_weights()[0]
     user_emb = layer_dict['user_emb'].get_weights()[0]
     book_bias = layer_dict['book_bias'].get_weights()[0]
     user_bias = layer_dict['user_bias'].get_weights()[0]
+    assert(book_emb.shape[0] == len(book2index)+1)
+    assert(user_emb.shape[0] == len(user2index)+1)
     book_emb[-1] = np.mean(book_emb[:-1], axis=0)
     user_emb[-1] = np.mean(user_emb[:-1], axis=0)
     book_bias[-1] = np.mean(book_bias[:-1], axis=0)
